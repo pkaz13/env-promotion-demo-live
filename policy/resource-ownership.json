@@ -1,0 +1,16 @@
+{
+  "_comment": "Each identifier lists the Environments allowed to reference it. Synthetic values. Dev and Staging share the Dev tenant (ADR-0001).",
+  "resources": {
+    "11111111-1111-1111-1111-111111111111": ["dev", "staging"],
+    "99999999-9999-9999-9999-999999999999": ["prod"],
+    "sql-demo-dev.example.internal": ["dev"],
+    "sql-demo-staging.example.internal": ["staging"],
+    "sql-demo-prod.example.internal": ["prod"],
+    "kv-demo-dev": ["dev"],
+    "kv-demo-staging": ["staging"],
+    "kv-demo-prod": ["prod"],
+    "api-demo-dev.example.internal": ["dev"],
+    "api-demo-staging.example.internal": ["staging"],
+    "api-demo-prod.example.internal": ["prod"]
+  }
+}

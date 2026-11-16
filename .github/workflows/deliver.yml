@@ -1,0 +1,69 @@
+name: deliver
+
+# Build once, promote the same artifact (by hash) through dev -> staging -> prod.
+# Each deploy job runs in a GitHub Environment, so it only sees that Environment's secrets.
+# On the company org: prod gets required reviewers; on-prem jobs use runs-on: [self-hosted, <env>].
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guardrail:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 scripts/check-env-isolation.py
+
+  build:
+    needs: guardrail
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.pkg.outputs.sha256 }}
+      version: ${{ steps.pkg.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: pkg
+        run: |
+          version="1.0.${{ github.run_number }}+${GITHUB_SHA::7}"
+          echo "$version" > src/VERSION
+          (cd src && zip -q ../app.zip app.py VERSION)
+          sha=$(sha256sum app.zip | cut -d' ' -f1)
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "### Built once: \`$version\` sha256 \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: app
+          path: app.zip
+
+  deploy-dev:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: dev
+    steps: &deploy
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: app
+      - name: Deploy (mock)
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          scripts/deploy.sh "${{ github.job == 'deploy-dev' && 'dev' || github.job == 'deploy-staging' && 'staging' || 'prod' }}" app.zip "${{ needs.build.outputs.sha256 }}" | tee out.txt
+          { echo '```'; cat out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-staging:
+    needs: [build, deploy-dev]
+    runs-on: ubuntu-latest
+    environment: staging
+    steps: *deploy
+
+  deploy-prod:
+    needs: [build, deploy-staging]
+    runs-on: ubuntu-latest
+    environment: prod
+    steps: *deploy
