@@ -27,6 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - id: pkg
+        shell: bash   # -eo pipefail: a failing deploy.sh must fail the job even when piped to tee
         run: |
           version="1.0.${{ github.run_number }}+${GITHUB_SHA::7}"
           echo "$version" > src/VERSION
@@ -35,7 +36,7 @@ jobs:
           echo "sha256=$sha" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "### Built once: \`$version\` sha256 \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: app
           path: app.zip
@@ -46,12 +47,13 @@ jobs:
     environment: dev
     steps: &deploy
       - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: app
       - name: Deploy (mock)
         env:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        shell: bash   # -eo pipefail: a failing deploy.sh must fail the job even when piped to tee
         run: |
           scripts/deploy.sh "${{ github.job == 'deploy-dev' && 'dev' || github.job == 'deploy-staging' && 'staging' || 'prod' }}" app.zip "${{ needs.build.outputs.sha256 }}" | tee out.txt
           { echo '```'; cat out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
